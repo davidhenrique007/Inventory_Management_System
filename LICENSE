@@ -1,0 +1,29 @@
+
+---
+
+### **12. Inicializando Git**
+
+```bash
+# Na raiz do projeto
+git init
+
+# Criar branchs principais
+git checkout -b main
+git checkout -b develop
+
+# Criar primeira feature branch
+git checkout -b feature/setup-inicial
+
+# Adicionar e commitar
+git add .
+git commit -m "feat: setup inicial do projeto
+
+- Estrutura de diretórios backend/frontend
+- Configuração ESLint e Prettier
+- Arquivos de ambiente
+- Documentação inicial
+- Git ignore configurado"
+
+# Voltar para develop
+git checkout develop
+git merge feature/setup-inicial
