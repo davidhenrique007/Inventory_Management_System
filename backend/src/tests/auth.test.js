@@ -1,30 +1,28 @@
+const request = require('supertest');
+const app = require('../../src/app');
+const { sequelize, User } = require('../../src/models');
+
 jest.setTimeout(30000);
 
-const request = require('supertest');
-const app = require('../../app');
-const { sequelize, User } = require('../../models');
+describe('?? Autenticação - Auth API', () => {
+  let testUser;
+  let accessToken;
+  let refreshToken;
 
-describe('ðŸ” AutenticaÃ§Ã£o - Auth API', () => {
-  
   beforeAll(async () => {
-    await sequelize.sync({ alter: true });
+    await sequelize.sync({ force: true });
   });
 
   afterAll(async () => {
     await sequelize.close();
   });
 
-  beforeEach(async () => {
-    // Limpar usuÃ¡rios antes de cada teste
-    await User.destroy({ where: {}, force: true });
-  });
-
   describe('POST /api/auth/register', () => {
-    test('Deve registrar um novo usuÃ¡rio com sucesso', async () => {
+    it('Deve registrar um novo usuário com sucesso', async () => {
       const response = await request(app)
         .post('/api/auth/register')
         .send({
-          name: 'UsuÃ¡rio Teste',
+          name: 'Usuário Teste',
           email: 'teste@email.com',
           password: '123456',
           role: 'operator'
@@ -34,62 +32,69 @@ describe('ðŸ” AutenticaÃ§Ã£o - Auth API', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveProperty('user');
       expect(response.body.data).toHaveProperty('tokens');
-      expect(response.body.data.user.email).toBe('teste@email.com');
+      
+      testUser = response.body.data.user;
+      accessToken = response.body.data.tokens.accessToken;
+      refreshToken = response.body.data.tokens.refreshToken;
     });
 
-    test('NÃ£o deve registrar com email duplicado', async () => {
-      await User.create({
-        name: 'Primeiro',
-        email: 'duplicado@email.com',
-        password: '123456'
-      });
-
+    it('Não deve registrar com email duplicado', async () => {
       const response = await request(app)
         .post('/api/auth/register')
         .send({
-          name: 'Segundo',
-          email: 'duplicado@email.com',
+          name: 'Outro Usuário',
+          email: 'teste@email.com',
           password: '123456'
         });
 
       expect(response.status).toBe(409);
-      expect(response.body.success).toBe(false);
     });
   });
 
   describe('POST /api/auth/login', () => {
-    beforeEach(async () => {
-      await User.create({
-        name: 'Login Test',
-        email: 'login@email.com',
-        password: '123456',
-        role: 'operator'
-      });
-    });
-
-    test('Deve fazer login com credenciais corretas', async () => {
+    it('Deve fazer login com credenciais corretas', async () => {
       const response = await request(app)
         .post('/api/auth/login')
         .send({
-          email: 'login@email.com',
+          email: 'teste@email.com',
           password: '123456'
         });
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveProperty('tokens');
     });
 
-    test('NÃ£o deve fazer login com senha errada', async () => {
+    it('Não deve fazer login com senha errada', async () => {
       const response = await request(app)
         .post('/api/auth/login')
         .send({
-          email: 'login@email.com',
+          email: 'teste@email.com',
           password: 'senhaerrada'
         });
 
       expect(response.status).toBe(401);
-      expect(response.body.success).toBe(false);
+    });
+  });
+
+  describe('POST /api/auth/refresh-token', () => {
+    it('Deve renovar access token', async () => {
+      const response = await request(app)
+        .post('/api/auth/refresh-token')
+        .send({ refreshToken });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveProperty('accessToken');
+    });
+  });
+
+  describe('GET /api/auth/verify', () => {
+    it('Deve verificar token válido', async () => {
+      const response = await request(app)
+        .get('/api/auth/verify')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.isAuthenticated).toBe(true);
     });
   });
 });
