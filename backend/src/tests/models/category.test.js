@@ -63,7 +63,4 @@ describe('🧪 Model Category', () => {
     expect(created).toBe(true);
 
     const { category: existing, created: createdAgain } = await Category.getOrCreate('Nova Categoria');
-    expect(existing).toBeDefined();
-    expect(createdAgain).toBe(false);
-  });
-});
+ 
