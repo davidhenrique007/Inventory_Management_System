@@ -1,11 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const morgan = require('morgan');
 const compression = require('compression');
-const rateLimit = require('express-rate-limit'); // 💡 NOVO: Prevenção de brute force
-const mongoSanitize = require('express-mongo-sanitize'); // 💡 NOVO: Prevenção NoSQL injection
-const xss = require('xss-clean'); // 💡 NOVO: Prevenção XSS
-const hpp = require('hpp'); // 💡 NOVO: Prevenção HTTP Parameter Pollution
+const rateLimit = require('express-rate-limit');
+
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 
@@ -13,99 +13,95 @@ const app = express();
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isProduction = process.env.NODE_ENV === 'production';
 
-// ==================== SEGURANÇA AVANÇADA ====================
+// ==================== SEGURANÇA ====================
 
-// 1. Rate limiting - Previne ataques de brute force
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // limite por IP
-  message: 'Muitas requisições deste IP, tente novamente em 15 minutos',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Helmet com configurações personalizadas
+app.use(helmet({
+  contentSecurityPolicy: isProduction ? undefined : false,
+  crossOriginEmbedderPolicy: false
+}));
 
-// Aplicar rate limit em todas as rotas /api
-app.use('/api', limiter);
-
-// 2. Helmet com configurações personalizadas
-app.use(
-  helmet({
-    contentSecurityPolicy: isProduction ? undefined : false, // Desabilitar CSP em dev se necessário
-    crossOriginEmbedderPolicy: false,
-  })
-);
-
-// 3. Sanitização de dados
-app.use(mongoSanitize()); // Limpa dados maliciosos
-app.use(xss()); // Limpa XSS
-
-// 4. Prevenção de Parameter Pollution
-app.use(hpp());
-
-// 5. CORS configurado adequadamente
+// CORS configurado
 const corsOptions = {
   origin: isDevelopment 
-    ? 'http://localhost:4200' // Angular default
-    : process.env.CORS_ORIGIN || 'https://seusite.com',
-  optionsSuccessStatus: 200,
+    ? ['http://localhost:4200', 'http://localhost:3000']
+    : process.env.FRONTEND_URL || 'https://seusite.com',
   credentials: true,
+  optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 app.use(cors(corsOptions));
 
+// Compressão
+app.use(compression());
+
+// ==================== RATE LIMITING ====================
+
+// Rate limiting global
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // limite por IP
+  message: { 
+    success: false, 
+    error: 'Muitas requisições deste IP, tente novamente em 15 minutos' 
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip
+});
+app.use('/api', limiter);
+
+// Rate limit mais restrito para autenticação
+const authLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 5, // 5 tentativas por hora
+  message: { 
+    success: false, 
+    error: 'Muitas tentativas de login, aguarde 1 hora' 
+  },
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => req.ip
+});
+
 // ==================== MIDDLEWARES GERAIS ====================
-app.use(compression()); // Compressão
-app.use(express.json({ limit: '10mb' })); // JSON parser com limite
+
+// Parse de JSON com limite
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ==================== LOGGING PROFISSIONAL ====================
+// Logging
 if (isDevelopment) {
-  // Morgan para logs de requisição em desenvolvimento
-  const morgan = require('morgan');
   app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined', {
+    skip: (req, res) => res.statusCode < 400 // Só loga erros em produção
+  }));
 }
-
-// Logging personalizado em produção
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const log = {
-      method: req.method,
-      url: req.originalUrl,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip,
-      userAgent: req.get('user-agent'),
-    };
-    
-    if (process.env.NODE_ENV === 'production') {
-      // Em produção, log estruturado para ferramentas como Winston/Pino
-      console.log(JSON.stringify(log));
-    } else {
-      // Em desenvolvimento, log colorido
-      const statusColor = res.statusCode >= 400 ? '\x1b[31m' : '\x1b[32m';
-      console.log(
-        `${log.method} ${log.url} ${statusColor}${log.status}\x1b[0m - ${log.duration}`
-      );
-    }
-  });
-  next();
-});
 
 // ==================== ROTAS PÚBLICAS ====================
 
 // Health check aprimorado
-app.get('/health', (req, res) => {
-  res.status(200).json({
+app.get('/health', async (req, res) => {
+  const healthcheck = {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
     memory: process.memoryUsage(),
-    database: 'check_your_db_connection' // Você pode adicionar verificação real depois
-  });
+    database: 'pending'
+  };
+
+  try {
+    // Testar conexão com banco (se quiser)
+    // await sequelize.authenticate();
+    healthcheck.database = 'connected';
+  } catch (error) {
+    healthcheck.database = 'disconnected';
+    healthcheck.status = 'degraded';
+  }
+
+  res.status(200).json(healthcheck);
 });
 
 // Rota base
@@ -114,31 +110,28 @@ app.get('/', (req, res) => {
     name: 'Inventory Management API',
     version: '1.0.0',
     description: 'API profissional para gestão de estoque',
-    documentation: '/api/docs',
     status: 'online',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    endpoints: {
+      auth: {
+        register: 'POST /api/auth/register',
+        login: 'POST /api/auth/login',
+        refresh: 'POST /api/auth/refresh-token',
+        me: 'GET /api/auth/me'
+      },
+      docs: '/api/docs'
+    },
+    documentation: 'https://github.com/seu-repo/inventory-management'
   });
 });
 
 // ==================== ROTAS DA API ====================
-// (Comentado por enquanto - será implementado nos próximos dias)
-/*
-const authRoutes = require('./routes/authRoutes');
-const productRoutes = require('./routes/productRoutes');
-const categoryRoutes = require('./routes/categoryRoutes');
-const movementRoutes = require('./routes/movementRoutes');
-const reportRoutes = require('./routes/reportRoutes');
 
-app.use('/api/auth', authRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/movements', movementRoutes);
-app.use('/api/reports', reportRoutes);
-*/
+// Rotas de autenticação com rate limit específico
+app.use('/api/auth', authLimiter, authRoutes);
 
-// ==================== TRATAMENTO DE ERROS ====================
+// ==================== TRATAMENTO DE ERROS 404 ====================
 
-// 404 Handler - Rota não encontrada
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -150,40 +143,54 @@ app.use((req, res) => {
   });
 });
 
-// Error Handler Global
+// ==================== TRATAMENTO DE ERROS GLOBAL ====================
+
 app.use((err, req, res, next) => {
   // Log do erro
-  console.error('🔥 Erro não tratado:', {
+  console.error('🔥 Erro:', {
     message: err.message,
-    stack: err.stack,
+    stack: isDevelopment ? err.stack : undefined,
     url: req.originalUrl,
     method: req.method,
     ip: req.ip,
+    userId: req.user?.id,
     timestamp: new Date().toISOString()
   });
 
-  // Erros específicos
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      success: false,
-      error: 'Erro de validação',
-      details: err.details || err.message
-    });
-  }
-
-  if (err.name === 'UnauthorizedError') {
+  // Erros específicos do JWT
+  if (err.name === 'UnauthorizedError' || err.code === 'UNAUTHORIZED') {
     return res.status(401).json({
       success: false,
       error: 'Não autorizado',
-      message: 'Token inválido ou expirado'
+      message: err.message || 'Token inválido ou expirado'
     });
   }
 
-  if (err.code === 'ER_DUP_ENTRY') {
+  // Erros de validação
+  if (err.name === 'ValidationError' || err.name === 'SequelizeValidationError') {
+    return res.status(400).json({
+      success: false,
+      error: 'Erro de validação',
+      details: err.errors?.map(e => e.message) || err.details || err.message
+    });
+  }
+
+  // Erros de duplicidade no banco
+  if (err.name === 'SequelizeUniqueConstraintError' || err.code === 'ER_DUP_ENTRY') {
     return res.status(409).json({
       success: false,
       error: 'Conflito',
-      message: 'Registro duplicado'
+      message: 'Registro já existe no sistema',
+      field: err.fields || err.parent?.sqlMessage
+    });
+  }
+
+  // Erros de conexão com banco
+  if (err.name === 'SequelizeConnectionError' || err.name === 'SequelizeConnectionRefusedError') {
+    return res.status(503).json({
+      success: false,
+      error: 'Serviço indisponível',
+      message: 'Erro de conexão com o banco de dados'
     });
   }
 
@@ -191,11 +198,11 @@ app.use((err, req, res, next) => {
   const status = err.status || 500;
   const response = {
     success: false,
-    error: err.message || 'Erro interno do servidor'
+    error: err.message || 'Erro interno do servidor',
+    code: err.code || 'INTERNAL_ERROR'
   };
 
-  // Adicionar stack trace apenas em desenvolvimento
-  if (isDevelopment && err.stack) {
+  if (isDevelopment) {
     response.stack = err.stack;
     response.details = err;
   }
@@ -203,16 +210,26 @@ app.use((err, req, res, next) => {
   res.status(status).json(response);
 });
 
-// ==================== TRATAMENTO DE PROMISES NÃO TRATADAS ====================
+// ==================== TRATAMENTO DE PROMESSAS NÃO TRATADAS ====================
+
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  // Em produção, você pode querer logar isso em um serviço como Sentry
+  console.error('❌ Unhandled Rejection:', {
+    reason: reason.message || reason,
+    stack: reason.stack,
+    promise
+  });
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
+  console.error('❌ Uncaught Exception:', {
+    message: error.message,
+    stack: error.stack
+  });
+  
   // Em produção, você pode querer reiniciar o processo
-  process.exit(1);
+  if (isProduction) {
+    process.exit(1);
+  }
 });
 
 module.exports = app;
