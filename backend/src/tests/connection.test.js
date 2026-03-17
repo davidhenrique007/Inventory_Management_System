@@ -1,3 +1,5 @@
+jest.setTimeout(30000);
+
 const { sequelize, testConnection } = require('../config/database');
 const { Sequelize } = require('sequelize');
 

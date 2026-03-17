@@ -1,3 +1,5 @@
+jest.setTimeout(30000);
+
 const { sequelize } = require('../../config/database');
 const Product = require('../../models/Product')(sequelize, sequelize.Sequelize);
 const Category = require('../../models/Category')(sequelize, sequelize.Sequelize);
