@@ -1,4 +1,4 @@
-const { validateProduct } = require('./validations/productValidation');
+const { validateProduct } = require('../validations/productValidation');
 const { beforeCreate, beforeUpdate } = require('./hooks/productHooks');
 
 module.exports = (sequelize, DataTypes) => {
