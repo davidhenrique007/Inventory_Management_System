@@ -1,12 +1,19 @@
 {
+  // Desabilitar validação TypeScript em arquivos JavaScript
+  "typescript.validate.enable": false,
+  "javascript.validate.enable": false,
+  
+  // Usar apenas ESLint para validação
   "eslint.validate": [
     "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact"
+    "javascriptreact"
   ],
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true
-  },
-  "editor.formatOnSave": true
+  
+  // Forçar ESLint a rodar em arquivos .js
+  "eslint.workingDirectories": [
+    { "mode": "auto" }
+  ],
+  
+  // Desabilitar outras validações que podem conflitar
+  "js/ts.implicitProjectConfig.checkJs": false
 }
