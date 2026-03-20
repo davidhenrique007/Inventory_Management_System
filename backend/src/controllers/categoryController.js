@@ -29,8 +29,7 @@ const categoryController = {
         limit: parsedLimit,
         offset,
         order: [[sortBy, order]],
-        attributes: ['id', 'name', 'slug', 'description', 'createdAt', 'updatedAt']
-      });
+        });
 
       // Calcular total de páginas
       const totalPages = Math.ceil(count / parsedLimit);
@@ -64,8 +63,7 @@ const categoryController = {
       const { id } = req.params;
 
       const category = await Category.findByPk(id, {
-        attributes: ['id', 'name', 'slug', 'description', 'createdAt', 'updatedAt']
-      });
+        });
 
       if (!category) {
         return res.status(404).json({
@@ -278,7 +276,6 @@ const categoryController = {
         include: [{
           model: Product,
           as: 'products',
-          attributes: [],
           required: false
         }],
         group: ['Category.id'],

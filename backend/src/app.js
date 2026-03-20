@@ -6,6 +6,7 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/authRoutes');
+const categoryRoutes = require('./routes/categoryRoutes'); // <-- ADICIONADO
 
 const app = express();
 
@@ -93,8 +94,9 @@ app.get('/health', async (req, res) => {
   };
 
   try {
-    // Testar conexão com banco (se quiser)
-    // await sequelize.authenticate();
+    // Testar conexão com banco
+    const { sequelize } = require('./models');
+    await sequelize.authenticate();
     healthcheck.database = 'connected';
   } catch (error) {
     healthcheck.database = 'disconnected';
@@ -119,6 +121,15 @@ app.get('/', (req, res) => {
         refresh: 'POST /api/auth/refresh-token',
         me: 'GET /api/auth/me'
       },
+      categories: {
+        list: 'GET /api/categories',
+        create: 'POST /api/categories',
+        getById: 'GET /api/categories/:id',
+        update: 'PUT /api/categories/:id',
+        delete: 'DELETE /api/categories/:id',
+        bySlug: 'GET /api/categories/slug/:slug',
+        withCount: 'GET /api/categories/with-count'
+      },
       docs: '/api/docs'
     },
     documentation: 'https://github.com/seu-repo/inventory-management'
@@ -129,6 +140,9 @@ app.get('/', (req, res) => {
 
 // Rotas de autenticação com rate limit específico
 app.use('/api/auth', authLimiter, authRoutes);
+
+// Rotas de categorias
+app.use('/api/categories', categoryRoutes); // <-- ADICIONADO
 
 // ==================== TRATAMENTO DE ERROS 404 ====================
 
