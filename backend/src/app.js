@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path'); // <-- ADICIONADO
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -6,7 +7,8 @@ const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/authRoutes');
-const categoryRoutes = require('./routes/categoryRoutes'); // <-- ADICIONADO
+const categoryRoutes = require('./routes/categoryRoutes');
+const productRoutes = require('./routes/productRoutes');
 
 const app = express();
 
@@ -71,6 +73,9 @@ const authLimiter = rateLimit({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Servir arquivos estáticos (uploads de imagens) <-- ADICIONADO
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Logging
 if (isDevelopment) {
   app.use(morgan('dev'));
@@ -130,6 +135,18 @@ app.get('/', (req, res) => {
         bySlug: 'GET /api/categories/slug/:slug',
         withCount: 'GET /api/categories/with-count'
       },
+      products: {
+        list: 'GET /api/products',
+        create: 'POST /api/products',
+        getById: 'GET /api/products/:id',
+        getByCode: 'GET /api/products/code/:code',
+        update: 'PUT /api/products/:id',
+        delete: 'DELETE /api/products/:id',
+        lowStock: 'GET /api/products/low-stock',
+        updateStock: 'PATCH /api/products/:id/stock',
+        uploadImage: 'POST /api/products/:id/image',
+        deleteImage: 'DELETE /api/products/:id/image'
+      },
       docs: '/api/docs'
     },
     documentation: 'https://github.com/seu-repo/inventory-management'
@@ -142,7 +159,10 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 
 // Rotas de categorias
-app.use('/api/categories', categoryRoutes); // <-- ADICIONADO
+app.use('/api/categories', categoryRoutes);
+
+// Rotas de produtos <-- ADICIONADO
+app.use('/api/products', productRoutes);
 
 // ==================== TRATAMENTO DE ERROS 404 ====================
 
