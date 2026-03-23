@@ -1,0 +1,226 @@
+openapi: 3.0.0
+info:
+  title: Inventory Management API
+  description: API para gestão de estoque
+  version: 1.0.0
+  contact:
+    name: Suporte
+    email: suporte@inventory.com
+
+servers:
+  - url: http://localhost:3000/api
+    description: Servidor de desenvolvimento
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []
+
+paths:
+  /products:
+    get:
+      summary: Listar produtos
+      description: Retorna lista paginada de produtos com filtros
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Número da página
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Itens por página
+        - name: category
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filtrar por ID da categoria
+        - name: code
+          in: query
+          schema:
+            type: string
+          description: Buscar por código do produto
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: Buscar por nome (parcial)
+        - name: lowStock
+          in: query
+          schema:
+            type: boolean
+          description: Apenas produtos com estoque baixo
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [name, code, price, stockQuantity, createdAt]
+            default: name
+          description: Campo para ordenação
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: ASC
+          description: Direção da ordenação
+      responses:
+        200:
+          description: Lista de produtos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      products:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Product'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        401:
+          description: Não autenticado
+
+  /products/{id}:
+    get:
+      summary: Buscar produto por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID do produto
+      responses:
+        200:
+          description: Produto encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Product'
+        404:
+          description: Produto não encontrado
+        401:
+          description: Não autenticado
+
+  /products/code/{code}:
+    get:
+      summary: Buscar produto por código
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Código do produto
+      responses:
+        200:
+          description: Produto encontrado
+        404:
+          description: Produto não encontrado
+
+  /products/low-stock:
+    get:
+      summary: Produtos com estoque baixo
+      description: Retorna produtos cujo estoque está igual ou abaixo do mínimo
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Lista de produtos com estoque baixo
+
+components:
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        price:
+          type: number
+          format: float
+        stockQuantity:
+          type: integer
+        minStock:
+          type: integer
+        maxStock:
+          type: integer
+        description:
+          type: string
+        isActive:
+          type: boolean
+        category:
+          $ref: '#/components/schemas/Category'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean

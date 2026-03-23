@@ -1,20 +1,12 @@
-const beforeCreate = async (product) => {
+const { Op } = require('sequelize');
+
+const beforeCreate = async (product, options) => {
   // Garantir que campos obrigatórios existam
-  if (!product.stockQuantity) {
-    product.stockQuantity = 0;
-  }
-
-  if (!product.minStock) {
-    product.minStock = 5;
-  }
-
-  if (!product.maxStock) {
-    product.maxStock = 100;
-  }
-
-  if (!product.price) {
-    product.price = 0;
-  }
+  if (product.stockQuantity === undefined) product.stockQuantity = 0;
+  if (product.minStock === undefined) product.minStock = 5;
+  if (product.maxStock === undefined) product.maxStock = 100;
+  if (product.price === undefined) product.price = 0;
+  if (product.isActive === undefined) product.isActive = true;
 
   // Formatar código para uppercase
   if (product.code) {
@@ -26,15 +18,27 @@ const beforeCreate = async (product) => {
     const baseCode = product.name
       .substring(0, 3)
       .toUpperCase()
-      .replace(/[^A-Z]/g, '');
-    
+      .replace(/[^A-Z0-9]/g, '');
     const timestamp = Date.now().toString().slice(-4);
     product.code = `${baseCode}${timestamp}`;
   }
 
   // Validar relação entre min e max stock
   if (product.minStock > product.maxStock) {
-    product.maxStock = product.minStock + 95; // Ajuste automático
+    product.maxStock = product.minStock + 95;
+  }
+
+  // Verificar unicidade do código
+  const existingProduct = await product.constructor.findOne({
+    where: {
+      code: product.code,
+      id: { [Op.ne]: product.id }
+    },
+    paranoid: false // Incluir soft deleted
+  });
+
+  if (existingProduct) {
+    throw new Error('Código do produto já existe');
   }
 
   console.log(`🔄 Pré-criação do produto: ${product.name || 'sem nome'}`);
@@ -43,48 +47,69 @@ const beforeCreate = async (product) => {
 const beforeUpdate = async (product) => {
   const changes = product.changed();
 
-  // Se o nome mudou, verificar se precisa atualizar algo
-  if (changes.includes('name')) {
+  if (changes && changes.includes('name')) {
     console.log(`📝 Nome do produto alterado: ${product._previousDataValues.name} -> ${product.name}`);
   }
 
-  // Se o preço mudou, log para auditoria
-  if (changes.includes('price')) {
+  if (changes && changes.includes('price')) {
     const oldPrice = product._previousDataValues.price;
     console.log(`💰 Preço alterado: ${oldPrice} -> ${product.price}`);
   }
 
-  // Se a quantidade mudou, verificar se está baixo
-  if (changes.includes('stockQuantity')) {
+  if (changes && changes.includes('stockQuantity')) {
     const oldStock = product._previousDataValues.stockQuantity;
     const newStock = product.stockQuantity;
-    
     console.log(`📦 Estoque alterado: ${oldStock} -> ${newStock}`);
 
-    // Se ficou abaixo do mínimo, alertar
     if (newStock <= product.minStock) {
       console.log(`⚠️ ALERTA: Produto ${product.code} com estoque baixo!`);
     }
   }
 
-  // Validar se estoque não ficou negativo
+  if (changes && changes.includes('code')) {
+    const oldCode = product._previousDataValues.code;
+    const newCode = product.code;
+    
+    if (oldCode !== newCode) {
+      // Verificar unicidade do novo código
+      const existingProduct = await product.constructor.findOne({
+        where: {
+          code: newCode,
+          id: { [Op.ne]: product.id }
+        },
+        paranoid: false
+      });
+      
+      if (existingProduct) {
+        throw new Error('Código do produto já existe');
+      }
+      
+      console.log(`🏷️ Código alterado: ${oldCode} -> ${newCode}`);
+    }
+  }
+
   if (product.stockQuantity < 0) {
     throw new Error('Estoque não pode ser negativo');
   }
 
-  // Validar se preço não ficou negativo
   if (product.price < 0) {
     throw new Error('Preço não pode ser negativo');
   }
 
-  // Atualizar timestamps
+  if (product.minStock > product.maxStock) {
+    throw new Error('Estoque mínimo não pode ser maior que o máximo');
+  }
+
+  if (product.costPrice > product.price) {
+    throw new Error('Preço de custo não pode ser maior que o preço de venda');
+  }
+
   product.updatedAt = new Date();
 };
 
 const afterCreate = async (product) => {
   console.log(`✅ Produto criado com sucesso: ${product.code}`);
   
-  // Aqui você poderia enviar notificação, email, etc
   if (product.stockQuantity <= product.minStock) {
     console.log(`⚠️ Novo produto já com estoque baixo!`);
   }
