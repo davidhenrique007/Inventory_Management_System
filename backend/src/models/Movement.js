@@ -20,10 +20,11 @@ module.exports = (sequelize, DataTypes) => {
     type: {
       type: DataTypes.ENUM('IN', 'OUT', 'ADJUSTMENT'),
       allowNull: false,
+      defaultValue: 'IN',
       validate: {
         isIn: {
           args: [['IN', 'OUT', 'ADJUSTMENT']],
-          msg: 'Tipo de movimento inválido'
+          msg: 'Tipo de movimento inválido. Use: IN, OUT ou ADJUSTMENT'
         }
       }
     },
@@ -44,6 +45,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       field: 'previous_stock',
       allowNull: false,
+      defaultValue: 0,
       validate: {
         min: 0
       }
@@ -52,6 +54,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       field: 'current_stock',
       allowNull: false,
+      defaultValue: 0,
       validate: {
         min: 0
       }
@@ -77,6 +80,18 @@ module.exports = (sequelize, DataTypes) => {
         const value = this.getDataValue('totalPrice');
         return value ? parseFloat(value) : null;
       }
+    },
+    referenceId: {
+      type: DataTypes.STRING(50),
+      field: 'reference_id',
+      allowNull: true,
+      comment: 'Número da nota fiscal, pedido, etc'
+    },
+    referenceType: {
+      type: DataTypes.STRING(50),
+      field: 'reference_type',
+      allowNull: true,
+      comment: 'INVOICE, ORDER, COUNT, etc'
     },
     notes: {
       type: DataTypes.TEXT,
@@ -104,14 +119,54 @@ module.exports = (sequelize, DataTypes) => {
 
     hooks: {
       beforeCreate: async (movement) => {
-        movement.previousStock = movement.previousStock || 0;
-        movement.currentStock = movement.type === 'IN'
-          ? movement.previousStock + movement.quantity
-          : movement.previousStock - movement.quantity;
-
+        // Buscar o produto para obter o estoque atual
+        const Product = sequelize.models.Product;
+        const product = await Product.findByPk(movement.productId, {
+          paranoid: false
+        });
+        
+        if (!product) {
+          throw new Error('Produto não encontrado');
+        }
+        
+        // Definir estoque anterior
+        movement.previousStock = product.stockQuantity;
+        
+        // Calcular novo estoque baseado no tipo de movimento
+        if (movement.type === 'IN') {
+          movement.currentStock = movement.previousStock + movement.quantity;
+        } else if (movement.type === 'OUT') {
+          if (movement.previousStock < movement.quantity) {
+            throw new Error(`Estoque insuficiente. Disponível: ${movement.previousStock}`);
+          }
+          movement.currentStock = movement.previousStock - movement.quantity;
+        } else if (movement.type === 'ADJUSTMENT') {
+          movement.currentStock = movement.quantity;
+        }
+        
+        // Calcular total price se unit price informado
         if (movement.unitPrice && movement.quantity) {
           movement.totalPrice = movement.unitPrice * movement.quantity;
         }
+        
+        // Garantir que os valores não sejam null
+        if (movement.previousStock === undefined || movement.previousStock === null) {
+          movement.previousStock = 0;
+        }
+        if (movement.currentStock === undefined || movement.currentStock === null) {
+          movement.currentStock = movement.previousStock;
+        }
+      },
+      
+      afterCreate: async (movement) => {
+        // Atualizar estoque do produto
+        const Product = sequelize.models.Product;
+        await Product.update(
+          { stockQuantity: movement.currentStock },
+          { where: { id: movement.productId } }
+        );
+        
+        console.log(`📦 Movimentação registrada: ${movement.type} | Produto: ${movement.productId} | Qtd: ${movement.quantity} | Estoque: ${movement.currentStock}`);
       }
     },
 
@@ -127,6 +182,9 @@ module.exports = (sequelize, DataTypes) => {
       },
       {
         fields: ['type']
+      },
+      {
+        fields: ['reference_id', 'reference_type']
       }
     ],
 
@@ -170,22 +228,49 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   // Métodos estáticos
-  Movement.getByProduct = function(productId, limit = 100) {
-    return this.scope('byProduct', 'recent').findAll({
+  Movement.getByProduct = async function(productId, options = {}) {
+    const { page = 1, limit = 50 } = options;
+    const offset = (page - 1) * limit;
+    
+    const { count, rows } = await this.findAndCountAll({
       where: { productId },
-      limit
+      include: [
+        {
+          model: sequelize.models.User,
+          as: 'user',
+          attributes: ['id', 'name', 'email']
+        }
+      ],
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit, 10),
+      offset
     });
+    
+    const totalPages = Math.ceil(count / limit);
+    
+    return {
+      movements: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      }
+    };
   };
 
-  Movement.getTodayMovements = async function() {
+  Movement.getTodayEntries = async function() {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     
     const end = new Date();
     end.setHours(23, 59, 59, 999);
-
-    return this.scope('byDateRange', 'recent').findAll({
+    
+    return this.findAll({
       where: {
+        type: 'IN',
         created_at: { [sequelize.Op.between]: [start, end] }
       }
     });
