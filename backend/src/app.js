@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/authRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const productRoutes = require('./routes/productRoutes');
+const movementRoutes = require('./routes/movementRoutes');
 
 const app = express();
 
@@ -161,8 +162,11 @@ app.use('/api/auth', authLimiter, authRoutes);
 // Rotas de categorias
 app.use('/api/categories', categoryRoutes);
 
-// Rotas de produtos <-- ADICIONADO
+// Rotas de produtos 
 app.use('/api/products', productRoutes);
+
+// Rotas de movimentações 
+app.use('/api/movements', movementRoutes);
 
 // ==================== TRATAMENTO DE ERROS 404 ====================
 
