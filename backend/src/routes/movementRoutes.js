@@ -1,6 +1,11 @@
 const express = require('express');
 const movementController = require('../controllers/movementController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
+const { 
+  validateStockBeforeExit, 
+  validateProductExists,
+  validatePositiveQuantity 
+} = require('../middleware/stockMiddleware');
 
 const router = express.Router();
 
@@ -22,13 +27,38 @@ router.post(
 
 /**
  * @route   POST /api/movements/exit
- * @desc    Registrar saída de estoque
+ * @desc    Registrar saída de estoque com validação
  * @access  Private (admin/manager/operator)
  */
 router.post(
   '/exit',
   authorize('admin', 'manager', 'operator'),
+  validatePositiveQuantity,
+  validateProductExists,
+  validateStockBeforeExit,
   movementController.createExitMovement
+);
+
+/**
+ * @route   POST /api/movements/quick-exit
+ * @desc    Saída rápida por código de barras
+ * @access  Private (admin/manager/operator)
+ */
+router.post(
+  '/quick-exit',
+  authorize('admin', 'manager', 'operator'),
+  movementController.quickExit
+);
+
+/**
+ * @route   POST /api/movements/batch-exit
+ * @desc    Múltiplas saídas em lote
+ * @access  Private (admin/manager)
+ */
+router.post(
+  '/batch-exit',
+  authorize('admin', 'manager'),
+  movementController.batchExit
 );
 
 /**
