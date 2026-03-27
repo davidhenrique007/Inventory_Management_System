@@ -1,5 +1,4 @@
-﻿const { Movement, Product, User } = require('../models');
-const StockService = require('../services/stockService');
+const { Movement, Product, User } = require('../models');
 const { 
   validateEntryMovement, 
   validateExitMovement,
@@ -8,27 +7,34 @@ const {
 } = require('../validations/movementValidation');
 
 const movementController = {
+  /**
+   * Registrar entrada de estoque
+   * POST /api/movements/entry
+   */
   async createEntryMovement(req, res, next) {
     try {
       const validatedData = validateEntryMovement(req.body);
       
+      // Verificar se produto existe
       const product = await Product.findByPk(validatedData.productId);
       if (!product) {
         return res.status(404).json({
           success: false,
-          error: 'PRODUCT_NOT_FOUND',
+          error: 'Produto não encontrado',
           message: `Nenhum produto encontrado com o ID ${validatedData.productId}`
         });
       }
       
+      // Verificar se produto está ativo
       if (!product.isActive) {
         return res.status(400).json({
           success: false,
-          error: 'PRODUCT_INACTIVE',
+          error: 'Produto inativo',
           message: 'Não é possível movimentar um produto inativo'
         });
       }
       
+      // Criar movimentação
       const movement = await Movement.create({
         productId: validatedData.productId,
         type: 'IN',
@@ -40,7 +46,16 @@ const movementController = {
         createdBy: req.user.id
       });
       
-      const updatedProduct = await Product.findByPk(product.id);
+      // Buscar produto atualizado com categoria
+      const updatedProduct = await Product.findByPk(product.id, {
+        include: [
+          {
+            model: require('../models').Category,
+            as: 'category',
+            attributes: ['id', 'name']
+          }
+        ]
+      });
       
       res.status(201).json({
         success: true,
@@ -64,7 +79,8 @@ const movementController = {
             id: updatedProduct.id,
             name: updatedProduct.name,
             code: updatedProduct.code,
-            stockQuantity: updatedProduct.stockQuantity
+            stockQuantity: updatedProduct.stockQuantity,
+            category: updatedProduct.category
           }
         }
       });
@@ -81,36 +97,54 @@ const movementController = {
     }
   },
 
+  /**
+   * Registrar saída de estoque
+   * POST /api/movements/exit
+   */
   async createExitMovement(req, res, next) {
     try {
       const validatedData = validateExitMovement(req.body);
       
+      // Verificar se produto existe
       const product = await Product.findByPk(validatedData.productId);
       if (!product) {
         return res.status(404).json({
           success: false,
-          error: 'PRODUCT_NOT_FOUND',
+          error: 'Produto não encontrado',
           message: `Nenhum produto encontrado com o ID ${validatedData.productId}`
         });
       }
       
+      // Verificar estoque disponível
       if (product.stockQuantity < validatedData.quantity) {
         return res.status(400).json({
           success: false,
-          error: 'INSUFFICIENT_STOCK',
-          message: `Estoque insuficiente. Disponível: ${product.stockQuantity}`,
-          currentStock: product.stockQuantity
+          error: 'Estoque insuficiente',
+          message: `Estoque atual (${product.stockQuantity}) é insuficiente para a saída de ${validatedData.quantity} unidades`
         });
       }
       
-      const result = await StockService.executeExit({
+      // Criar movimentação
+      const movement = await Movement.create({
         productId: validatedData.productId,
+        type: 'OUT',
         quantity: validatedData.quantity,
         unitPrice: validatedData.unitPrice,
         referenceId: validatedData.referenceId,
         referenceType: validatedData.referenceType || 'SALE',
         notes: validatedData.notes,
-        userId: req.user.id
+        createdBy: req.user.id
+      });
+      
+      // Buscar produto atualizado
+      const updatedProduct = await Product.findByPk(product.id, {
+        include: [
+          {
+            model: require('../models').Category,
+            as: 'category',
+            attributes: ['id', 'name']
+          }
+        ]
       });
       
       res.status(201).json({
@@ -118,24 +152,25 @@ const movementController = {
         message: 'Saída de estoque registrada com sucesso',
         data: {
           movement: {
-            id: result.movement.id,
-            productId: result.movement.productId,
-            type: result.movement.type,
-            quantity: result.movement.quantity,
-            previousStock: result.product.previousStock,
-            currentStock: result.product.newStock,
-            unitPrice: result.movement.unitPrice,
-            totalPrice: result.movement.totalPrice,
-            referenceId: result.movement.referenceId,
-            referenceType: result.movement.referenceType,
-            notes: result.movement.notes,
-            createdAt: result.movement.createdAt
+            id: movement.id,
+            productId: movement.productId,
+            type: movement.type,
+            quantity: movement.quantity,
+            previousStock: movement.previousStock,
+            currentStock: movement.currentStock,
+            unitPrice: movement.unitPrice,
+            totalPrice: movement.totalPrice,
+            referenceId: movement.referenceId,
+            referenceType: movement.referenceType,
+            notes: movement.notes,
+            createdAt: movement.createdAt
           },
           product: {
-            id: result.product.id,
-            name: result.product.name,
-            code: result.product.code,
-            stockQuantity: result.product.newStock
+            id: updatedProduct.id,
+            name: updatedProduct.name,
+            code: updatedProduct.code,
+            stockQuantity: updatedProduct.stockQuantity,
+            category: updatedProduct.category
           }
         }
       });
@@ -152,136 +187,28 @@ const movementController = {
     }
   },
 
-  async quickExit(req, res, next) {
-    try {
-      const { code, quantity, notes } = req.body;
-      
-      if (!code) {
-        return res.status(400).json({
-          success: false,
-          error: 'CODE_REQUIRED',
-          message: 'Código do produto é obrigatório'
-        });
-      }
-      
-      const product = await Product.findOne({ where: { code: code.toUpperCase() } });
-      
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          error: 'PRODUCT_NOT_FOUND',
-          message: `Produto com código ${code} não encontrado`
-        });
-      }
-      
-      const validation = await StockService.validateExit(product.id, quantity);
-      
-      if (!validation.valid) {
-        return res.status(400).json({
-          success: false,
-          error: validation.error,
-          message: validation.message
-        });
-      }
-      
-      const result = await StockService.executeExit({
-        productId: product.id,
-        quantity,
-        notes: notes || 'Saída rápida via código de barras',
-        userId: req.user.id
-      });
-      
-      res.status(201).json({
-        success: true,
-        message: 'Saída registrada com sucesso',
-        data: {
-          product: {
-            id: result.product.id,
-            name: result.product.name,
-            code: result.product.code,
-            previousStock: result.product.previousStock,
-            newStock: result.product.newStock
-          },
-          quantity,
-          remainingStock: result.product.newStock
-        }
-      });
-      
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  async batchExit(req, res, next) {
-    try {
-      const { items } = req.body;
-      
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'INVALID_BATCH',
-          message: 'Lista de itens inválida'
-        });
-      }
-      
-      const results = {
-        success: [],
-        errors: []
-      };
-      
-      for (const item of items) {
-        try {
-          const { productId, quantity, notes } = item;
-          
-          const result = await StockService.executeExit({
-            productId,
-            quantity,
-            notes: notes || 'Saída em lote',
-            userId: req.user.id
-          });
-          
-          results.success.push({
-            productId,
-            productName: result.product.name,
-            quantity,
-            newStock: result.product.newStock
-          });
-          
-        } catch (error) {
-          results.errors.push({
-            productId: item.productId,
-            quantity: item.quantity,
-            error: error.message
-          });
-        }
-      }
-      
-      res.status(207).json({
-        success: results.errors.length === 0,
-        message: `${results.success.length} itens processados, ${results.errors.length} falhas`,
-        data: results
-      });
-      
-    } catch (error) {
-      next(error);
-    }
-  },
-
+  /**
+   * Ajuste manual de estoque
+   * POST /api/movements/adjustment
+   */
   async createAdjustmentMovement(req, res, next) {
     try {
       const validatedData = validateAdjustmentMovement(req.body);
       
+      // Verificar se produto existe
       const product = await Product.findByPk(validatedData.productId);
       if (!product) {
         return res.status(404).json({
           success: false,
-          error: 'PRODUCT_NOT_FOUND',
+          error: 'Produto não encontrado',
           message: `Nenhum produto encontrado com o ID ${validatedData.productId}`
         });
       }
       
+      // Calcular diferença
       const difference = validatedData.newStock - product.stockQuantity;
       
+      // Criar movimentação
       const movement = await Movement.create({
         productId: validatedData.productId,
         type: 'ADJUSTMENT',
@@ -290,6 +217,7 @@ const movementController = {
         createdBy: req.user.id
       });
       
+      // Atualizar estoque (já foi feito pelo hook)
       const updatedProduct = await Product.findByPk(product.id);
       
       res.status(201).json({
@@ -329,15 +257,20 @@ const movementController = {
     }
   },
 
+  /**
+   * Histórico de movimentações por produto
+   * GET /api/movements/product/:productId
+   */
   async getProductMovements(req, res, next) {
     try {
       const validated = validateProductHistory(req.params, req.query);
       
+      // Verificar se produto existe
       const product = await Product.findByPk(validated.productId);
       if (!product) {
         return res.status(404).json({
           success: false,
-          error: 'PRODUCT_NOT_FOUND',
+          error: 'Produto não encontrado',
           message: `Nenhum produto encontrado com o ID ${validated.productId}`
         });
       }
@@ -373,6 +306,10 @@ const movementController = {
     }
   },
 
+  /**
+   * Resumo de movimentações por período
+   * GET /api/movements/summary
+   */
   async getMovementSummary(req, res, next) {
     try {
       const { startDate, endDate } = req.query;
@@ -381,15 +318,19 @@ const movementController = {
       let end = endDate ? new Date(endDate) : new Date();
       
       if (startDate) start.setHours(0, 0, 0, 0);
-      else start.setDate(start.getDate() - 30);
+      else start.setDate(start.getDate() - 30); // últimos 30 dias
       
       if (endDate) end.setHours(23, 59, 59, 999);
       else end.setHours(23, 59, 59, 999);
       
       const summary = await Movement.getSummary(start, end);
       
+      // Formatar resultado
       const result = {
-        period: { start, end },
+        period: {
+          start,
+          end
+        },
         movements: {
           IN: { total: 0, quantity: 0, value: 0 },
           OUT: { total: 0, quantity: 0, value: 0 },
@@ -417,6 +358,10 @@ const movementController = {
     }
   },
 
+  /**
+   * Últimas movimentações do sistema
+   * GET /api/movements/recent
+   */
   async getRecentMovements(req, res, next) {
     try {
       const { limit = 20 } = req.query;
