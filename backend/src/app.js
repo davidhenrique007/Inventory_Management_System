@@ -1,5 +1,5 @@
 const express = require('express');
-const path = require('path'); // <-- ADICIONADO
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -10,6 +10,7 @@ const authRoutes = require('./routes/authRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const productRoutes = require('./routes/productRoutes');
 const movementRoutes = require('./routes/movementRoutes');
+const reportRoutes = require('./routes/reportRoutes'); // <-- ADICIONADO
 
 const app = express();
 
@@ -74,7 +75,7 @@ const authLimiter = rateLimit({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Servir arquivos estáticos (uploads de imagens) <-- ADICIONADO
+// Servir arquivos estáticos (uploads de imagens)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Logging
@@ -82,7 +83,7 @@ if (isDevelopment) {
   app.use(morgan('dev'));
 } else {
   app.use(morgan('combined', {
-    skip: (req, res) => res.statusCode < 400 // Só loga erros em produção
+    skip: (req, res) => res.statusCode < 400
   }));
 }
 
@@ -100,7 +101,6 @@ app.get('/health', async (req, res) => {
   };
 
   try {
-    // Testar conexão com banco
     const { sequelize } = require('./models');
     await sequelize.authenticate();
     healthcheck.database = 'connected';
@@ -148,6 +148,24 @@ app.get('/', (req, res) => {
         uploadImage: 'POST /api/products/:id/image',
         deleteImage: 'DELETE /api/products/:id/image'
       },
+      movements: {
+        entry: 'POST /api/movements/entry',
+        exit: 'POST /api/movements/exit',
+        quickExit: 'POST /api/movements/quick-exit',
+        batchExit: 'POST /api/movements/batch-exit',
+        adjustment: 'POST /api/movements/adjustment',
+        history: 'GET /api/movements/product/:productId',
+        recent: 'GET /api/movements/recent',
+        summary: 'GET /api/movements/summary'
+      },
+      reports: {
+        dashboard: 'GET /api/reports/dashboard',
+        lowStock: 'GET /api/reports/low-stock',
+        recentMovements: 'GET /api/reports/recent-movements',
+        movementSummary: 'GET /api/reports/movement-summary',
+        movementChart: 'GET /api/reports/movement-chart',
+        topProducts: 'GET /api/reports/top-products'
+      },
       docs: '/api/docs'
     },
     documentation: 'https://github.com/seu-repo/inventory-management'
@@ -162,11 +180,14 @@ app.use('/api/auth', authLimiter, authRoutes);
 // Rotas de categorias
 app.use('/api/categories', categoryRoutes);
 
-// Rotas de produtos 
+// Rotas de produtos
 app.use('/api/products', productRoutes);
 
-// Rotas de movimentações 
+// Rotas de movimentações
 app.use('/api/movements', movementRoutes);
+
+// Rotas de relatórios <-- ADICIONADO
+app.use('/api/reports', reportRoutes);
 
 // ==================== TRATAMENTO DE ERROS 404 ====================
 
@@ -264,7 +285,6 @@ process.on('uncaughtException', (error) => {
     stack: error.stack
   });
   
-  // Em produção, você pode querer reiniciar o processo
   if (isProduction) {
     process.exit(1);
   }
