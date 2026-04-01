@@ -1,6 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { isPlatformBrowser } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatGridListModule } from '@angular/material/grid-list';
 import { MatIconModule } from '@angular/material/icon';
@@ -239,10 +240,18 @@ export class DashboardComponent implements OnInit {
   data: DashboardData | null = null;
   loading = true;
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {}
 
   ngOnInit(): void {
-    this.loadDashboard();
+    // Só carrega o dashboard no navegador (browser), nunca no servidor (SSR)
+    if (isPlatformBrowser(this.platformId)) {
+      this.loadDashboard();
+    } else {
+      this.loading = false;
+    }
   }
 
   loadDashboard(): void {
