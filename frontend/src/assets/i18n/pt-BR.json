@@ -1,0 +1,68 @@
+{
+  "products": {
+    "title": {
+      "create": "Novo Produto",
+      "edit": "Editar Produto"
+    },
+    "form": {
+      "name": "Nome do produto",
+      "namePlaceholder": "Ex: Notebook Dell Inspiron",
+      "code": "Código de barras",
+      "codePlaceholder": "Código único do produto",
+      "category": "Categoria",
+      "categoryPlaceholder": "Selecione uma categoria",
+      "price": "Preço de venda",
+      "pricePlaceholder": "0,00",
+      "costPrice": "Preço de custo",
+      "costPricePlaceholder": "0,00",
+      "stock": "Quantidade em estoque",
+      "stockPlaceholder": "0",
+      "minStock": "Estoque mínimo",
+      "minStockPlaceholder": "5",
+      "maxStock": "Estoque máximo",
+      "maxStockPlaceholder": "100",
+      "location": "Localização",
+      "locationPlaceholder": "Ex: A-01-01",
+      "description": "Descrição",
+      "descriptionPlaceholder": "Descrição detalhada do produto",
+      "image": "Imagem do produto",
+      "active": "Produto ativo"
+    },
+    "buttons": {
+      "save": "Salvar produto",
+      "updating": "Atualizando...",
+      "creating": "Salvando...",
+      "cancel": "Cancelar",
+      "back": "Voltar"
+    },
+    "messages": {
+      "createSuccess": "Produto criado com sucesso!",
+      "updateSuccess": "Produto atualizado com sucesso!",
+      "codeExists": "Este código já está em uso",
+      "nameRequired": "Nome é obrigatório",
+      "codeRequired": "Código é obrigatório",
+      "categoryRequired": "Categoria é obrigatória",
+      "priceInvalid": "Preço inválido",
+      "stockInvalid": "Quantidade inválida",
+      "stockNegative": "Quantidade não pode ser negativa",
+      "minStockInvalid": "Estoque mínimo inválido",
+      "maxStockInvalid": "Estoque máximo inválido",
+      "imageSize": "A imagem não pode exceder 5MB",
+      "imageType": "Formato de imagem inválido"
+    },
+    "placeholders": {
+      "searchCategory": "Buscar categoria...",
+      "noCategories": "Nenhuma categoria encontrada",
+      "loading": "Carregando..."
+    }
+  },
+  "common": {
+    "actions": {
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "close": "Fechar"
+    }
+  }
+}
