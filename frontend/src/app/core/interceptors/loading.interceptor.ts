@@ -6,7 +6,6 @@ import { LoadingService } from '../../shared/services/loading.service';
 
 @Injectable()
 export class LoadingInterceptor implements HttpInterceptor {
-
   private activeRequests = 0;
 
   constructor(private loadingService: LoadingService) {}
@@ -15,9 +14,9 @@ export class LoadingInterceptor implements HttpInterceptor {
     if (this.activeRequests === 0) {
       this.loadingService.show();
     }
-
+    
     this.activeRequests++;
-
+    
     return next.handle(request).pipe(
       finalize(() => {
         this.activeRequests--;
