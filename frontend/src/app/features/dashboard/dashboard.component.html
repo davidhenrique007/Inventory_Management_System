@@ -1,0 +1,188 @@
+﻿<div class="dashboard">
+  <div class="dashboard-header">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Visão geral do seu inventário</p>
+  </div>
+
+  <div class="loading-state" *ngIf="loading">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p>Carregando dados...</p>
+  </div>
+
+  <div *ngIf="!loading && summary">
+    <div class="kpi-grid">
+      <app-kpi-card
+        title="Total de Produtos"
+        [value]="summary.products.total"
+        icon="inventory_2"
+        subtitle="ativos no sistema">
+      </app-kpi-card>
+
+      <app-kpi-card
+        title="Valor em Estoque"
+        [value]="summary.stock.totalValue | number: '1.2-2'"
+        icon="attach_money"
+        subtitle="R$ valor total">
+      </app-kpi-card>
+
+      <app-kpi-card
+        title="Estoque Crítico"
+        [value]="summary.products.lowStock"
+        icon="warning"
+        subtitle="abaixo do mínimo"
+        type="warning">
+      </app-kpi-card>
+
+      <app-kpi-card
+        title="Sem Estoque"
+        [value]="summary.products.outOfStock"
+        icon="error"
+        subtitle="produtos zerados"
+        type="danger">
+      </app-kpi-card>
+
+      <app-kpi-card
+        title="Movimentações Hoje"
+        [value]="summary.movements.today"
+        icon="today"
+        subtitle="registros">
+      </app-kpi-card>
+
+      <app-kpi-card
+        title="Movimentações Mês"
+        [value]="summary.movements.thisMonth"
+        icon="calendar_month"
+        subtitle="últimos 30 dias">
+      </app-kpi-card>
+    </div>
+
+    <div class="charts-grid">
+      <mat-card class="chart-card">
+        <mat-card-header>
+          <mat-card-title>Estoque por Categoria</mat-card-title>
+          <mat-card-subtitle>Distribuição das quantidades</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <app-bar-chart
+            [data]="stockByCategoryData"
+            title="Quantidade"
+            yAxisLabel="Quantidade">
+          </app-bar-chart>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="chart-card">
+        <mat-card-header>
+          <mat-card-title>Movimentações Mensais</mat-card-title>
+          <mat-card-subtitle>Entradas vs Saídas</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <app-line-chart
+            [datasets]="monthlyMovementsData"
+            [labels]="monthlyLabels"
+            title="Movimentações">
+          </app-line-chart>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+    <mat-card class="table-card">
+      <mat-card-header>
+        <mat-card-title>Produtos com Estoque Crítico</mat-card-title>
+        <mat-card-subtitle>Estoque abaixo do mínimo recomendado</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="critical-products" *ngIf="criticalProducts.length === 0">
+          <p class="empty-state">🎉 Todos os produtos estão com estoque adequado!</p>
+        </div>
+        <table mat-table [dataSource]="criticalProducts" *ngIf="criticalProducts.length > 0">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Produto</th>
+            <td mat-cell *matCellDef="let p">
+              <strong>{{ p.name }}</strong>
+              <span class="product-code">{{ p.code }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="category">
+            <th mat-header-cell *matHeaderCellDef>Categoria</th>
+            <td mat-cell *matCellDef="let p">{{ p.categoryName }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="stock">
+            <th mat-header-cell *matHeaderCellDef>Estoque</th>
+            <td mat-cell *matCellDef="let p">
+              <span [class.critical]="p.stockQuantity <= p.minStock">
+                {{ p.stockQuantity }} / {{ p.minStock }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef>Status</th>
+            <td mat-cell *matCellDef="let p">
+              <mat-chip [color]="p.stockQuantity === 0 ? 'warn' : 'accent'" highlighted>
+                {{ p.stockQuantity === 0 ? 'ESGOTADO' : 'CRÍTICO' }}
+              </mat-chip>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="criticalColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: criticalColumns"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="table-card">
+      <mat-card-header>
+        <mat-card-title>Últimas Movimentações</mat-card-title>
+        <mat-card-subtitle>Atividade recente do estoque</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="recent-movements" *ngIf="recentMovements.length === 0">
+          <p class="empty-state">📭 Nenhuma movimentação recente</p>
+        </div>
+        <table mat-table [dataSource]="recentMovements" *ngIf="recentMovements.length > 0">
+          <ng-container matColumnDef="type">
+            <th mat-header-cell *matHeaderCellDef>Tipo</th>
+            <td mat-cell *matCellDef="let m">
+              <mat-chip [color]="m.type === 'IN' ? 'primary' : 'warn'" highlighted>
+                {{ m.typeLabel }}
+              </mat-chip>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="product">
+            <th mat-header-cell *matHeaderCellDef>Produto</th>
+            <td mat-cell *matCellDef="let m">
+              <strong>{{ m.productName }}</strong>
+              <span class="product-code">{{ m.productCode }}</span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="quantity">
+            <th mat-header-cell *matHeaderCellDef>Quantidade</th>
+            <td mat-cell *matCellDef="let m">
+              <span [class.text-success]="m.type === 'IN'" [class.text-danger]="m.type === 'OUT'">
+                {{ m.type === 'IN' ? '+' : '-' }}{{ m.quantity }}
+              </span>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="user">
+            <th mat-header-cell *matHeaderCellDef>Usuário</th>
+            <td mat-cell *matCellDef="let m">{{ m.userName }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="date">
+            <th mat-header-cell *matHeaderCellDef>Data</th>
+            <td mat-cell *matCellDef="let m">{{ m.createdAt | dateFormat }}</td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="recentColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: recentColumns"></tr>
+        </table>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>
