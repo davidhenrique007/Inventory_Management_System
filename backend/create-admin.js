@@ -1,18 +1,25 @@
-﻿const { sequelize, User } = require('./src/models');
 const bcrypt = require('bcryptjs');
+const { v4: uuidv4 } = require('uuid');
+const { sequelize, User } = require('./src/models');
 
 async function createAdmin() {
   try {
     await sequelize.authenticate();
     console.log('✅ Conectado ao banco');
     
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    
     const [user, created] = await User.findOrCreate({
       where: { email: 'admin@test.com' },
       defaults: {
+        id: uuidv4(),
         name: 'Administrador',
         email: 'admin@test.com',
-        password: '123456',
-        role: 'admin'
+        password: hashedPassword,
+        role: 'admin',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date()
       }
     });
     
@@ -20,12 +27,14 @@ async function createAdmin() {
       console.log('✅ Usuário admin criado!');
     } else {
       console.log('⚠️ Usuário já existe, atualizando senha...');
-      user.password = '123456';
-      await user.save();
+      await user.update({ password: hashedPassword });
       console.log('✅ Senha atualizada!');
     }
     
-    console.log('Usuário:', user.email, 'Role:', user.role);
+    console.log('📧 Email: admin@test.com');
+    console.log('🔑 Senha: admin123');
+    
+    await sequelize.close();
     process.exit(0);
   } catch (error) {
     console.error('❌ Erro:', error.message);
