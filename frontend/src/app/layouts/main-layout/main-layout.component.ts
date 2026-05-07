@@ -1,8 +1,8 @@
-import { Component } from '@angular/core';
+﻿import { Component, ViewChild } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
-import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatSidenavModule, MatSidenav } from '@angular/material/sidenav';
 import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,13 +26,7 @@ import { AuthService } from '../../core/services/auth.service';
   styleUrls: ['./main-layout.component.scss']
 })
 export class MainLayoutComponent {
-  menuItems = [
-    { path: '/dashboard', icon: 'dashboard', label: 'Dashboard' },
-    { path: '/products', icon: 'inventory_2', label: 'Produtos' },
-    { path: '/categories', icon: 'category', label: 'Categorias' },
-    { path: '/movements', icon: 'swap_horiz', label: 'Movimentações' },
-    { path: '/reports', icon: 'assessment', label: 'Relatórios' }
-  ];
+  @ViewChild('sidenav') sidenav!: MatSidenav;
 
   constructor(private authService: AuthService) {}
 

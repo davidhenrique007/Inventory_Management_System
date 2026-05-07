@@ -1,27 +1,18 @@
-import { Injectable, Inject, PLATFORM_ID } from '@angular/core';
-import { CanActivate, Router } from '@angular/router';
-import { isPlatformBrowser } from '@angular/common';
+﻿import { Injectable } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthService } from '../services/auth.service';
 
-@Injectable({
-  providedIn: 'root'
-})
-export class AuthGuard implements CanActivate {
+@Injectable({ providedIn: 'root' })
+export class AuthGuard {
   constructor(
-    private router: Router,
-    @Inject(PLATFORM_ID) private platformId: Object
+    private authService: AuthService,
+    private router: Router
   ) {}
 
   canActivate(): boolean {
-    // No SSR (Server-Side Rendering), bloqueia o acesso
-    if (!isPlatformBrowser(this.platformId)) {
-      return false;
-    }
-
-    const token = localStorage.getItem('access_token');
-    if (token) {
+    if (this.authService.isAuthenticated()) {
       return true;
     }
-
     this.router.navigate(['/auth/login']);
     return false;
   }

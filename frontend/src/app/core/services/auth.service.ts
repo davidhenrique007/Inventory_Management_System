@@ -6,27 +6,11 @@ import { tap, catchError } from 'rxjs/operators';
 import { isPlatformBrowser } from '@angular/common';
 import { environment } from '../../../environments/environment';
 
-// Interfaces
 export interface User {
   id: string;
   name: string;
   email: string;
   role: 'admin' | 'manager' | 'operator';
-  isActive?: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-export interface RegisterData {
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword?: string;
 }
 
 export interface AuthResponse {
@@ -46,6 +30,7 @@ export interface AuthResponse {
 })
 export class AuthService {
   private readonly TOKEN_KEY = 'access_token';
+  private readonly REFRESH_TOKEN_KEY = 'refresh_token';
   private readonly USER_KEY = 'user';
   private isBrowser: boolean;
 
@@ -74,7 +59,7 @@ export class AuthService {
     }
   }
 
-  login(credentials: LoginCredentials): Observable<AuthResponse> {
+  login(credentials: { email: string; password: string }): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, credentials)
       .pipe(
         tap(response => {
@@ -86,7 +71,7 @@ export class AuthService {
       );
   }
 
-  register(userData: RegisterData): Observable<AuthResponse> {
+  register(userData: { name: string; email: string; password: string }): Observable<AuthResponse> {
     const payload = {
       name: userData.name,
       email: userData.email,
@@ -105,10 +90,19 @@ export class AuthService {
       );
   }
 
+  refreshToken(): Observable<AuthResponse> {
+    const refreshToken = this.getRefreshToken();
+    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/refresh-token`, { refreshToken })
+      .pipe(
+        catchError(this.handleError)
+      );
+  }
+
   logout(): void {
     if (!this.isBrowser) return;
 
     localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.REFRESH_TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
     this.userSubject.next(null);
     this.router.navigate(['/auth/login']);
@@ -117,6 +111,16 @@ export class AuthService {
   getToken(): string | null {
     if (!this.isBrowser) return null;
     return localStorage.getItem(this.TOKEN_KEY);
+  }
+
+  getRefreshToken(): string | null {
+    if (!this.isBrowser) return null;
+    return localStorage.getItem(this.REFRESH_TOKEN_KEY);
+  }
+
+  setToken(token: string): void {
+    if (!this.isBrowser) return;
+    localStorage.setItem(this.TOKEN_KEY, token);
   }
 
   getUser(): User | null {
@@ -140,6 +144,7 @@ export class AuthService {
     if (!this.isBrowser) return;
 
     localStorage.setItem(this.TOKEN_KEY, data.tokens.accessToken);
+    localStorage.setItem(this.REFRESH_TOKEN_KEY, data.tokens.refreshToken);
     localStorage.setItem(this.USER_KEY, JSON.stringify(data.user));
     this.userSubject.next(data.user);
   }

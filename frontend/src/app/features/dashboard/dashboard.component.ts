@@ -1,273 +1,119 @@
-import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
-import { isPlatformBrowser } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
+import { interval, Subscription } from 'rxjs';
 import { MatGridListModule } from '@angular/material/grid-list';
+import { MatCardModule } from '@angular/material/card';
+import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { environment } from '../../../environments/environment';
-
-interface DashboardData {
-  products: {
-    total: number;
-    lowStock: number;
-    outOfStock: number;
-  };
-  categories: {
-    total: number;
-  };
-  stock: {
-    totalQuantity: number;
-    totalValue: string;
-  };
-  movements: {
-    today: number;
-    thisMonth: number;
-  };
-}
+import { DashboardService, DashboardSummary, CriticalProduct, RecentMovement } from '../../core/services/dashboard.service';
+import { KpiCardComponent } from '../../shared/components/kpi-card/kpi-card.component';
+import { BarChartComponent } from '../../shared/components/charts/bar-chart.component';
+import { LineChartComponent } from '../../shared/components/charts/line-chart.component';
+import { DateFormatPipe } from '../../pipes/date-format.pipe';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [
     CommonModule,
-    MatCardModule,
     MatGridListModule,
+    MatCardModule,
+    MatTableModule,
     MatIconModule,
-    MatProgressSpinnerModule
+    MatChipsModule,
+    MatProgressSpinnerModule,
+    KpiCardComponent,
+    BarChartComponent,
+    LineChartComponent,
+    DateFormatPipe
   ],
-  template: `
-    <div class="dashboard-container">
-      <h1>Dashboard</h1>
-
-      <div class="loading-container" *ngIf="loading">
-        <mat-spinner diameter="40"></mat-spinner>
-        <p>Carregando dados...</p>
-      </div>
-
-      <div *ngIf="!loading && data">
-        <div class="stats-grid">
-          <mat-card class="stat-card">
-            <mat-card-content>
-              <div class="stat-icon">
-                <mat-icon>inventory_2</mat-icon>
-              </div>
-              <div class="stat-info">
-                <h3>{{ data.products.total }}</h3>
-                <p>Total de Produtos</p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-
-          <mat-card class="stat-card warning" *ngIf="data.products.lowStock > 0">
-            <mat-card-content>
-              <div class="stat-icon">
-                <mat-icon>warning</mat-icon>
-              </div>
-              <div class="stat-info">
-                <h3>{{ data.products.lowStock }}</h3>
-                <p>Produtos com Estoque Baixo</p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-
-          <mat-card class="stat-card danger" *ngIf="data.products.outOfStock > 0">
-            <mat-card-content>
-              <div class="stat-icon">
-                <mat-icon>error</mat-icon>
-              </div>
-              <div class="stat-info">
-                <h3>{{ data.products.outOfStock }}</h3>
-                <p>Produtos sem Estoque</p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-
-          <mat-card class="stat-card">
-            <mat-card-content>
-              <div class="stat-icon">
-                <mat-icon>category</mat-icon>
-              </div>
-              <div class="stat-info">
-                <h3>{{ data.categories.total }}</h3>
-                <p>Categorias</p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-
-          <mat-card class="stat-card">
-            <mat-card-content>
-              <div class="stat-icon">
-                <mat-icon>store</mat-icon>
-              </div>
-              <div class="stat-info">
-                <h3>{{ data.stock.totalQuantity }}</h3>
-                <p>Unidades em Estoque</p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-
-          <mat-card class="stat-card">
-            <mat-card-content>
-              <div class="stat-icon">
-                <mat-icon>attach_money</mat-icon>
-              </div>
-              <div class="stat-info">
-                <h3>R$ {{ data.stock.totalValue }}</h3>
-                <p>Valor Total do Estoque</p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-        </div>
-
-        <div class="movements-grid">
-          <mat-card class="movement-card">
-            <mat-card-header>
-              <mat-icon mat-card-avatar>today</mat-icon>
-              <mat-card-title>Movimentações de Hoje</mat-card-title>
-            </mat-card-header>
-            <mat-card-content>
-              <h2>{{ data.movements.today }}</h2>
-              <p>movimentações registradas</p>
-            </mat-card-content>
-          </mat-card>
-
-          <mat-card class="movement-card">
-            <mat-card-header>
-              <mat-icon mat-card-avatar>calendar_month</mat-icon>
-              <mat-card-title>Movimentações do Mês</mat-card-title>
-            </mat-card-header>
-            <mat-card-content>
-              <h2>{{ data.movements.thisMonth }}</h2>
-              <p>movimentações registradas</p>
-            </mat-card-content>
-          </mat-card>
-        </div>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .dashboard-container {
-      padding: 20px;
-    }
-    h1 {
-      margin-bottom: 24px;
-      font-size: 24px;
-      font-weight: 500;
-    }
-    .loading-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px;
-    }
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      margin-bottom: 24px;
-    }
-    .stat-card {
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .stat-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    }
-    .stat-card mat-card-content {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .stat-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
-      background: #e8eaf6;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .stat-icon mat-icon {
-      font-size: 28px;
-      width: 28px;
-      height: 28px;
-      color: #3f51b5;
-    }
-    .stat-info h3 {
-      font-size: 28px;
-      font-weight: 500;
-      margin: 0;
-    }
-    .stat-info p {
-      margin: 4px 0 0;
-      color: #666;
-      font-size: 14px;
-    }
-    .stat-card.warning .stat-icon {
-      background: #fff3e0;
-    }
-    .stat-card.warning .stat-icon mat-icon {
-      color: #ff9800;
-    }
-    .stat-card.danger .stat-icon {
-      background: #ffebee;
-    }
-    .stat-card.danger .stat-icon mat-icon {
-      color: #f44336;
-    }
-    .movements-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-    }
-    .movement-card {
-      text-align: center;
-      padding: 16px;
-    }
-    .movement-card h2 {
-      font-size: 36px;
-      font-weight: 500;
-      margin: 16px 0 8px;
-      color: #3f51b5;
-    }
-  `]
+  templateUrl: './dashboard.component.html',
+  styleUrls: ['./dashboard.component.scss']
 })
-export class DashboardComponent implements OnInit {
-  data: DashboardData | null = null;
+export class DashboardComponent implements OnInit, OnDestroy {
   loading = true;
+  summary: DashboardSummary | null = null;
+  stockByCategoryData: { label: string; value: number; color?: string }[] = [];
+  monthlyLabels: string[] = [];
+  monthlyMovementsData: { label: string; data: number[]; borderColor: string; backgroundColor: string }[] = [];
+  criticalProducts: CriticalProduct[] = [];
+  recentMovements: RecentMovement[] = [];
 
-  constructor(
-    private http: HttpClient,
-    @Inject(PLATFORM_ID) private platformId: Object
-  ) {}
+  criticalColumns: string[] = ['name', 'category', 'stock', 'status'];
+  recentColumns: string[] = ['type', 'product', 'quantity', 'user', 'date'];
+
+  private refreshSubscription?: Subscription;
+
+  constructor(private dashboardService: DashboardService) {}
 
   ngOnInit(): void {
-    // Só carrega o dashboard no navegador (browser), nunca no servidor (SSR)
-    if (isPlatformBrowser(this.platformId)) {
-      this.loadDashboard();
-    } else {
-      this.loading = false;
-    }
+    this.loadDashboardData();
+
+    this.refreshSubscription = interval(30000).subscribe(() => {
+      this.loadDashboardData(false);
+    });
   }
 
-  loadDashboard(): void {
-    this.http.get<{ success: boolean; data: DashboardData }>(
-      `${environment.apiUrl}/reports/dashboard`
-    ).subscribe({
-      next: (response) => {
-        if (response.success) {
-          this.data = response.data;
-        }
-        this.loading = false;
-      },
-      error: (error) => {
-        console.error('Erro ao carregar dashboard:', error);
-        this.loading = false;
-      }
+  ngOnDestroy(): void {
+    this.refreshSubscription?.unsubscribe();
+  }
+
+  private loadDashboardData(showLoading: boolean = true): void {
+    if (showLoading) this.loading = true;
+
+    Promise.all([
+      this.dashboardService.getSummary().toPromise(),
+      this.dashboardService.getCriticalProducts(6).toPromise(),
+      this.dashboardService.getRecentMovements(8).toPromise()
+    ]).then(([summaryRes, criticalRes, recentRes]) => {
+      if (summaryRes?.success) this.summary = summaryRes.data;
+      if (criticalRes?.success) this.criticalProducts = criticalRes.data;
+      if (recentRes?.success) this.recentMovements = recentRes.data;
+
+      this.loadChartsData();
+      this.loading = false;
+    }).catch(() => {
+      this.loading = false;
     });
+  }
+
+  private async loadChartsData(): Promise<void> {
+    try {
+      const [stockRes, monthlyRes] = await Promise.all([
+        this.dashboardService.getStockByCategory().toPromise(),
+        this.dashboardService.getMonthlyMovements().toPromise()
+      ]);
+
+      if (stockRes?.success) {
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+        this.stockByCategoryData = stockRes.data.map((item, idx) => ({
+          label: item.category,
+          value: item.quantity,
+          color: colors[idx % colors.length]
+        }));
+      }
+
+      if (monthlyRes?.success) {
+        this.monthlyLabels = monthlyRes.data.map(item => item.month);
+        this.monthlyMovementsData = [
+          {
+            label: 'Entradas',
+            data: monthlyRes.data.map(item => item.entries),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)'
+          },
+          {
+            label: 'Saidas',
+            data: monthlyRes.data.map(item => item.exits),
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)'
+          }
+        ];
+      }
+    } catch (error) {
+      console.error('Erro ao carregar graficos:', error);
+    }
   }
 }
